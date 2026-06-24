@@ -4,6 +4,7 @@
 
 - Group A1 — Risk Management Enhancements: ✅ COMPLETE
 - Group A2 — Control & Compliance Enhancements: ✅ COMPLETE
+- Group A3 — Policy Enhancements: ✅ COMPLETE
 
 ## Phase 9.12 - Pillar 1 Closure and Regression Gate (2026-06-22)
 
@@ -337,3 +338,65 @@
   - `PYTHONPATH=. .venv/bin/pytest tests/unit -q` -> PASS (0 failures)
   - `PYTHONPATH=. .venv/bin/pytest tests/unit --collect-only` -> `681 tests collected`
   - `.venv/bin/alembic heads` -> `0102_policy_risk_mappings (head)`
+
+## Phase A3.5 - Policy-to-Issue Linking (2026-06-24)
+
+- Added Alembic migration `0103_policy_issue_links.py` on top of head `0102_policy_risk_mappings`.
+  - New table: `policy_issue_links`.
+  - Added violation/severity check constraints, org-scoped indexes, soft-delete field (`deleted_at`), and partial unique index for active `(policy_id, issue_id)` pairs.
+  - In this branch, issue linkage is backed by existing `tasks` records (`issue_id -> tasks.id`) because there is no separate `issues` table/model.
+- Added model:
+  - `app/models/policy_issue_link.py`
+- Added schema:
+  - `app/schemas/policy_issue_link.py`
+- Added compliance service:
+  - `app/compliance/services/policy_issue_link_service.py`
+  - Implements link lifecycle (create/list/get/update/soft delete), policy and issue scoped views, policy effectiveness analytics, issue policy context, and org-wide effectiveness summary.
+- Added API router:
+  - `app/api/v1/policy_issue_links.py` (under `/api/v1/compliance/*`)
+  - Endpoints:
+    - `POST /policy-issue-links`
+    - `GET /policy-issue-links`
+    - `GET /policy-issue-links/summary`
+    - `GET /policy-issue-links/{link_id}`
+    - `PATCH /policy-issue-links/{link_id}`
+    - `DELETE /policy-issue-links/{link_id}`
+    - `GET /policies/{policy_id}/issue-links`
+    - `GET /policies/{policy_id}/effectiveness`
+    - `GET /issues/{issue_id}/policy-links`
+    - `GET /issues/{issue_id}/policy-context`
+- Updated central wiring:
+  - `app/api/v1/router.py`
+  - `app/models/__init__.py`
+  - `app/compliance/services/__init__.py`
+- Updated RBAC and audit seeds in `app/services/seed_service.py`:
+  - New permissions:
+    - `policy_issues:manage`
+    - `policy_issues:view`
+  - Added role mappings:
+    - `compliance_manager`: `policy_issues:manage`, `policy_issues:view`
+    - `reviewer`, `auditor`, `readonly`: `policy_issues:view`
+  - Added audit events:
+    - `policy_issue_link.created`
+    - `policy_issue_link.updated`
+    - `policy_issue_link.deleted`
+- Added unit suite:
+  - `tests/unit/test_policy_issue_links_a35.py`
+  - Covers lifecycle, duplicate guard, soft delete + relink, cross-org validation, filters, policy effectiveness metrics, issue context, org summary, tenant isolation, and RBAC write restrictions.
+- Validation:
+  - `PYTHONPATH=. .venv/bin/pytest tests/unit/test_policy_issue_links_a35.py -q` -> PASS (5 tests, 0 failures)
+  - `PYTHONPATH=. .venv/bin/pytest tests/unit -q` -> PASS (0 failures)
+  - `PYTHONPATH=. .venv/bin/pytest tests/unit --collect-only` -> `686 tests collected`
+  - `.venv/bin/alembic heads` -> `0103_policy_issue_links (head)`
+
+## GROUP A3 CHECKPOINT — Policy Enhancements
+**Date:** 2026-06-24
+**Status:** COMPLETE (A3.6 cancelled by design)
+**Phases completed:** A3.1, A3.2, A3.3, A3.4, A3.5
+**Phase cancelled:** A3.6 (external engine — separate repo)
+**Migration head:** 0103
+**Total tests passing:** 686 passed, 2 warnings, 0 failed
+**New endpoints added:** 51 new method+path routes since Group A2 gate (149 baseline -> 200 total including ingest): `POST/GET /api/v1/compliance/attestation-campaigns`, `GET /api/v1/compliance/attestation-campaigns/dashboard`, `GET/PATCH/DELETE /api/v1/compliance/attestation-campaigns/{campaign_id}`, `POST /api/v1/compliance/attestation-campaigns/{campaign_id}/attest`, `GET /api/v1/compliance/attestation-campaigns/{campaign_id}/completion`, `POST /api/v1/compliance/attestation-campaigns/{campaign_id}/exempt/{user_id}`, `POST /api/v1/compliance/attestation-campaigns/{campaign_id}/remind/{user_id}`, `POST /api/v1/compliance/attestation-campaigns/{campaign_id}/reminders`, `GET /api/v1/compliance/attestation-records/me`, `GET /api/v1/compliance/attestation-records/user/{user_id}`, `GET /api/v1/compliance/policies/{policy_id}/attestation-summary`; `POST/GET /api/v1/compliance/policy-exceptions`, `GET /api/v1/compliance/policy-exceptions/dashboard`, `GET/PATCH/DELETE /api/v1/compliance/policy-exceptions/{exception_id}`, `POST /api/v1/compliance/policy-exceptions/{exception_id}/approve`, `POST /api/v1/compliance/policy-exceptions/{exception_id}/reject`, `GET /api/v1/compliance/policies/{policy_id}/exception-summary`; `GET /api/v1/compliance/policy-templates`, `GET /api/v1/compliance/policy-templates/categories`, `GET /api/v1/compliance/policy-templates/frameworks`, `GET /api/v1/compliance/policy-templates/clones`, `GET /api/v1/compliance/policy-templates/slug/{slug}`, `GET /api/v1/compliance/policy-templates/{template_id}`, `POST /api/v1/compliance/policy-templates/{template_id}/clone`, `GET /api/v1/compliance/policy-templates/{template_id}/stats`; `POST/GET /api/v1/compliance/policy-risk-mappings`, `GET /api/v1/compliance/policy-risk-mappings/summary`, `GET/PATCH/DELETE /api/v1/compliance/policy-risk-mappings/{mapping_id}`, `GET /api/v1/compliance/policies/{policy_id}/risk-mappings`, `GET /api/v1/compliance/policies/{policy_id}/risk-coverage`, `GET /api/v1/compliance/risks/{risk_id}/policy-mappings`, `GET /api/v1/compliance/risks/{risk_id}/policy-coverage`; `POST/GET /api/v1/compliance/policy-issue-links`, `GET /api/v1/compliance/policy-issue-links/summary`, `GET/PATCH/DELETE /api/v1/compliance/policy-issue-links/{link_id}`, `GET /api/v1/compliance/policies/{policy_id}/issue-links`, `GET /api/v1/compliance/policies/{policy_id}/effectiveness`, `GET /api/v1/compliance/issues/{issue_id}/policy-links`, `GET /api/v1/compliance/issues/{issue_id}/policy-context`
+**Boundary audit:** PASSED
+**Schema note:** policy_issue_links.issue_id -> tasks.id (no issues table exists; tasks is the real issue-like entity in this codebase)
+**Notes:** Pytest warnings unchanged (Starlette `TestClient` deprecation and Python `crypt` deprecation). `alembic heads` confirms single `0103_policy_issue_links` head. A3 migrations 0099-0103 use `VARCHAR` + check constraints only (no PostgreSQL native `ENUM`). `policy_mapping_suggestions` table is not present, `policy_suggestions:view` permission is not present/duplicated, and the 7 integration seams remain intact (no schema change to compliance_policies/controls/policy_control_links; `require_permission()` and `AuditService.log()` signatures unchanged; seed/router include patterns preserved).
